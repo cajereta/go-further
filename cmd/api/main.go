@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 	"go-further.boxideas.com.ar/internal/data"
 	"go-further.boxideas.com.ar/internal/jsonlog"
+	"go-further.boxideas.com.ar/internal/mailer"
 )
 
 const version = "1.0.0"
@@ -30,12 +31,20 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 type application struct {
 	config config
 	logger *jsonlog.Logger
 	models data.Models
+	mailer mailer.Mailer
 }
 
 func main() {
@@ -46,6 +55,10 @@ func main() {
 	}
 
 	postgresURL := os.Getenv("POSTGRES_URL")
+	smtp_host := os.Getenv("SMTP_HOST")
+
+	smtp_username := os.Getenv("SMTP_USERNAME")
+	smtp_password := os.Getenv("SMTP_PASSWORD")
 	var cfg config
 
 	//Ports, env, database
@@ -62,6 +75,13 @@ func main() {
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 5, "Rate limiter maximum request per second")
 	flag.IntVar(&cfg.limiter.burst, "limiter-bust", 10, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Rate limiter enabled")
+
+	//SMTP
+	flag.StringVar(&cfg.smtp.host, "smtp-host", smtp_host, "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 587, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", smtp_username, "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", smtp_password, "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Box Ideas <no-reply@example.com>", "SMTP sender")
 
 	flag.Parse()
 
@@ -80,6 +100,7 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	err = app.serve()
